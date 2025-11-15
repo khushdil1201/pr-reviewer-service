@@ -26,9 +26,9 @@
 
 **Шаги:**
 
-1. Скачайте и распакуйте проект (если скачали как zip):
+1. Скачайте проект из GitHub:
    ```bash
-   unzip pr-reviewer-service.zip
+   git clone https://github.com/khushdil1201/pr-reviewer-service.git
    cd pr-reviewer-service
    ```
 
