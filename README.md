@@ -55,10 +55,6 @@ make docker-clean     # Остановка и удаление volumes
 
 Этот вариант подходит для разработки.
 
-**Требования:**
-- Go 1.21 или новее ([скачать](https://go.dev/dl/))
-- PostgreSQL 15 или новее ([скачать](https://www.postgresql.org/download/))
-
 **Шаги:**
 
 1. Скачайте проект из GitHub:
@@ -106,28 +102,13 @@ make docker-clean     # Остановка и удаление volumes
 
 6. Сервис будет доступен на `http://localhost:8080`
 
-### Вариант 3: Сборка бинарного файла
-
-   ```bash
-   # Linux/Mac:
-   export DATABASE_URL="postgres://postgres:postgres@localhost:5432/pr_reviewer?sslmode=disable"
-   
-   # Windows (PowerShell):
-   $env:DATABASE_URL="postgres://postgres:postgres@localhost:5432/pr_reviewer?sslmode=disable"
-   
-   # Windows (CMD):
-   set DATABASE_URL=postgres://postgres:postgres@localhost:5432/pr_reviewer?sslmode=disable
-   ```
-   
-   > **Важно:** Замените `postgres:postgres` на ваши реальные логин:пароль PostgreSQL
-
 ## API Endpoints
 
 ### Teams
 
 - `POST /team/add` - Создать команду с участниками
 - `GET /team/get?team_name=<name>` - Получить команду
-- `POST /team/deactivateAll` - Деактивировать всех пользователей в команде  ← НОВЫЙ
+- `POST /team/deactivateAll` - Деактивировать всех пользователей в команде
 
 ### Users
 
@@ -223,11 +204,6 @@ curl -X POST http://localhost:8080/pullRequest/create \
 ├── test_requests.ps1           # Скрипт для тестовых запросов (Windows)
 └── test_requests.sh            # Скрипт для тестовых запросов (Linux/macOS)
 ```
-
-## Требования
-
-- Docker и Docker Compose
-- Или Go 1.21+ и PostgreSQL 15+ (для локальной разработки)
 
 ## Переменные окружения
 
