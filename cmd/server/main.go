@@ -6,6 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 	"time"
 
 	"pr-reviewer-service/internal/handler"
@@ -18,18 +21,26 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func main() {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		log.Fatal("DATABASE_URL environment variable is required")
-	}
+const (
+	defaultDBURL = "postgres://postgres:postgres@localhost:5432/pr_reviewer_db?sslmode=disable"
+	defaultPort  = "8080"
+)
 
-	ctx := context.Background()
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dbURL := getEnv("DATABASE_URL", defaultDBURL)
+	port := getEnv("PORT", defaultPort)
+
+	log.Printf("Using database URL: %s", maskDBURL(dbURL))
+	log.Printf("Server will listen on port: %s", port)
 
 	log.Println("Running database migrations...")
 	if err := runMigrations(dbURL); err != nil {
-		log.Printf("Migration warning: %v", err)
+		log.Fatalf("Failed to run migrations: %v", err)
 	}
+	log.Println("Migrations completed successfully")
 
 	log.Println("Connecting to database...")
 	pool, err := pgxpool.New(ctx, dbURL)
@@ -46,13 +57,7 @@ func main() {
 	repo := repository.NewRepository(pool)
 	svc := service.NewService(repo)
 	h := handler.NewHandler(svc)
-
 	router := h.SetupRoutes()
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
 
 	server := &http.Server{
 		Addr:         ":" + port,
@@ -61,17 +66,63 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	log.Printf("Server starting on port %s...", port)
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+	go func() {
+		log.Printf("Server starting on port %s...", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed to start: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutdown signal received, shutting down...")
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server forced to shutdown: %v", err)
+	} else {
+		log.Println("Server exited gracefully")
 	}
 }
 
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func maskDBURL(url string) string {
+	start := "postgres://"
+	if !strings.HasPrefix(url, start) {
+		return "******"
+	}
+
+	atIndex := strings.Index(url[len(start):], "@")
+	if atIndex == -1 {
+		return url
+	}
+	atIndex += len(start)
+
+	colonIndex := -1
+	for i := len(start); i < atIndex; i++ {
+		if url[i] == ':' {
+			colonIndex = i
+		}
+	}
+
+	if colonIndex == -1 {
+		return url
+	}
+
+	return url[:colonIndex+1] + "***" + url[atIndex:]
+}
+
 func runMigrations(dbURL string) error {
-	m, err := migrate.New(
-		"file://migrations",
-		dbURL,
-	)
+	m, err := migrate.New("file://migrations", dbURL)
 	if err != nil {
 		return fmt.Errorf("failed to create migration instance: %w", err)
 	}
@@ -88,7 +139,5 @@ func runMigrations(dbURL string) error {
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
-
-	log.Println("Migrations completed successfully")
 	return nil
 }
